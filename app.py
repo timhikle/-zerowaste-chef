@@ -1,4 +1,4 @@
-import os, json
+import os, json, traceback
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -8,12 +8,11 @@ import httpx
 app = FastAPI(title="ZeroWaste Chef")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 static_dir = os.path.join(BASE_DIR, "static")
 if os.path.isdir(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+templates_path = os.path.join(BASE_DIR, "templates")
+templates = Jinja2Templates(directory=templates_path)
 
 AI_API_KEY = os.getenv("AI_API_KEY")
 AI_PROVIDER = os.getenv("AI_PROVIDER", "openai")
@@ -32,6 +31,14 @@ SYSTEM_PROMPT = """أنت مساعد طبخ خبير. مهمتك توليد وص
 """
 
 
+@app.exception_handler(Exception)
+async def debug_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"error": traceback.format_exc()}
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -39,65 +46,35 @@ async def index(request: Request):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "python": os.sys.version, "static_exists": os.path.isdir(static_dir), "templates_exists": os.path.isdir(templates_path)}
 
 
 @app.post("/generate")
 async def generate(ingredients: str = Form(...)):
     if not AI_API_KEY or AI_API_KEY == "YOUR_API_KEY_HERE":
-        return JSONResponse(
-            status_code=400,
-            content={"error": "API key not set. Update the .env file."}
-        )
+        return JSONResponse(status_code=400, content={"error": "API key not set."})
     if not ingredients.strip():
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Please enter at least one ingredient."}
-        )
-    try:
-        url = f"{AI_BASE_URL.rstrip('/')}/chat/completions"
-        prompt = f"Ingredients: {ingredients}\n\nCreate one creative recipe using these ingredients. Reply in JSON only."
-        payload = {
-            "model": AI_MODEL,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.7
-        }
-        headers = {
-            "Authorization": f"Bearer {AI_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-            raw = data["choices"][0]["message"]["content"]
-        text = raw.strip()
-        if text.startswith("```json"):
-            text = text[7:]
-        if text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        recipe = json.loads(text.strip())
-        return JSONResponse(content=recipe)
-    except json.JSONDecodeError:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Failed to parse AI response. Try again."}
-        )
-    except httpx.HTTPStatusError as e:
-        return JSONResponse(
-            status_code=502,
-            content={"error": f"AI service error: {e.response.status_code}"}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
-        )
+        return JSONResponse(status_code=400, content={"error": "Please enter ingredients."})
+    url = f"{AI_BASE_URL.rstrip('/')}/chat/completions"
+    prompt = f"Ingredients: {ingredients}\n\nCreate one creative recipe. Reply in JSON only."
+    payload = {
+        "model": AI_MODEL,
+        "messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
+        "temperature": 0.7
+    }
+    headers = {"Authorization": f"Bearer {AI_API_KEY}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"]
+    text = raw.strip()
+    for prefix in ["```json", "```"]:
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+    if text.endswith("```"):
+        text = text[:-3]
+    recipe = json.loads(text.strip())
+    return JSONResponse(content=recipe)
 
 
 if __name__ == "__main__":
