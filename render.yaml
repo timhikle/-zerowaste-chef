@@ -10,6 +10,6 @@ services:
       - key: AI_PROVIDER
         value: openai
       - key: AI_MODEL
-        value: google/gemma-4-31b-it:free
+        value: meta-llama/llama-3.3-70b-instruct:free
       - key: AI_BASE_URL
         value: https://openrouter.ai/api/v1

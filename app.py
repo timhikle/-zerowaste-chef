@@ -16,7 +16,7 @@ templates = Jinja2Templates(directory=templates_path)
 
 AI_API_KEY = os.getenv("AI_API_KEY")
 AI_PROVIDER = os.getenv("AI_PROVIDER", "openai")
-AI_MODEL = os.getenv("AI_MODEL", "google/gemma-4-31b-it:free")
+AI_MODEL = os.getenv("AI_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 AI_BASE_URL = os.getenv("AI_BASE_URL", "https://openrouter.ai/api/v1")
 
 SYSTEM_PROMPT = """أنت مساعد طبخ خبير. مهمتك توليد وصفة طعام بناءً على مكونات معينة.
@@ -65,6 +65,8 @@ async def generate(ingredients: str = Form(...)):
     headers = {"Authorization": f"Bearer {AI_API_KEY}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(url, json=payload, headers=headers)
+        if resp.status_code == 429:
+            return JSONResponse(status_code=503, content={"error": "The AI service is currently busy (rate limit). Please wait a moment and try again."})
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"]
     text = raw.strip()
