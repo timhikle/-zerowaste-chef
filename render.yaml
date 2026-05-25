@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: zerowaste-chef
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_PROVIDER
+        value: openai
+      - key: AI_MODEL
+        value: google/gemma-4-31b-it:free
+      - key: AI_BASE_URL
+        value: https://openrouter.ai/api/v1
