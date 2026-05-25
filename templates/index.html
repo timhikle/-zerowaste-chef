@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZeroWaste Chef – طبخ بلا هدر</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 300: '#86efac', 400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d', 800: '#166534', 900: '#14532d' }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .spinner { border: 3px solid #e5e7eb; border-top: 3px solid #22c55e; border-radius: 50%; width: 40px; height: 40px; animation: spin 0.8s linear infinite; margin: 0 auto; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .step-number { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: #22c55e; color: white; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-primary-50 via-white to-primary-100 min-h-screen font-sans">
+
+    <!-- Navbar -->
+    <header class="bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-50 border-b border-primary-100">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="text-3xl">🌱</span>
+                <h1 class="text-2xl font-extrabold text-primary-700 tracking-tight">ZeroWaste <span class="text-primary-500">Chef</span></h1>
+            </div>
+            <p class="text-sm text-gray-500 hidden sm:block"><i class="fas fa-utensils ml-1"></i> طبخ بلا هدر، وصفات بذكاء</p>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-8">
+
+        <!-- Hero -->
+        <section class="text-center mb-10 fade-in">
+            <h2 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-3">ما عندك في الثلاجة؟ 🧑‍🍳</h2>
+            <p class="text-gray-500 text-lg max-w-xl mx-auto">اكتب المكونات المتوفرة عندك، ودع الذكاء الاصطناعي يبتكر لك وصفة لذيذة وسريعة.</p>
+        </section>
+
+        <!-- Input Form -->
+        <section class="bg-white rounded-2xl shadow-lg p-6 sm:p-8 mb-8 border border-primary-100 fade-in">
+            <form id="recipeForm" class="space-y-4">
+                <div>
+                    <label for="ingredients" class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-basket-shopping ml-1 text-primary-500"></i> المكونات المتوفرة
+                    </label>
+                    <textarea id="ingredients" name="ingredients" rows="3"
+                        class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none transition text-lg resize-none"
+                        placeholder="مثال: بيض، طماطم، بصل، جبن، زيت زيتون، خبز"></textarea>
+                    <p class="text-xs text-gray-400 mt-1">افصل المكونات بفواصل (،)</p>
+                </div>
+                <button type="submit" id="submitBtn"
+                    class="w-full bg-gradient-to-l from-primary-600 to-primary-500 hover:from-primary-700 hover:to-primary-600 text-white font-bold py-3 px-6 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg text-lg flex items-center justify-center gap-2">
+                    <i class="fas fa-wand-magic-sparkles"></i>
+                    ابتكر لي وصفة
+                </button>
+            </form>
+        </section>
+
+        <!-- Loading -->
+        <div id="loading" class="hidden text-center py-12">
+            <div class="spinner"></div>
+            <p class="text-primary-600 font-semibold mt-4 text-lg">جاري ابتكار الوصفة ... 🔄</p>
+        </div>
+
+        <!-- Error -->
+        <div id="error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-8 text-center fade-in">
+            <i class="fas fa-circle-exclamation ml-1"></i> <span id="errorMessage"></span>
+        </div>
+
+        <!-- Result -->
+        <div id="result" class="hidden fade-in">
+            <div class="bg-white rounded-2xl shadow-lg p-6 sm:p-8 border border-primary-100">
+                <!-- Title + Calories -->
+                <div class="flex flex-wrap items-center justify-between mb-6 gap-3">
+                    <h3 id="recipeTitle" class="text-2xl sm:text-3xl font-bold text-gray-800"></h3>
+                    <span id="recipeCalories" class="bg-primary-100 text-primary-800 text-sm font-bold px-4 py-2 rounded-full">
+                        <i class="fas fa-fire ml-1"></i>
+                    </span>
+                </div>
+
+                <!-- Ingredients -->
+                <div class="mb-6">
+                    <h4 class="text-lg font-bold text-gray-700 mb-3 flex items-center gap-2">
+                        <i class="fas fa-carrot text-primary-500"></i> المكونات
+                    </h4>
+                    <div id="ingredientsList" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <!-- Steps -->
+                <div class="mb-6">
+                    <h4 class="text-lg font-bold text-gray-700 mb-3 flex items-center gap-2">
+                        <i class="fas fa-list-ol text-primary-500"></i> طريقة التحضير
+                    </h4>
+                    <ol id="stepsList" class="space-y-3"></ol>
+                </div>
+
+                <!-- Tips -->
+                <div id="tipsSection" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <h4 class="font-bold text-amber-800 mb-1 flex items-center gap-2">
+                        <i class="fas fa-lightbulb text-amber-500"></i> نصائح
+                    </h4>
+                    <p id="recipeTips" class="text-amber-700"></p>
+                </div>
+            </div>
+
+            <!-- New Recipe Button -->
+            <div class="text-center mt-6">
+                <button onclick="resetForm()"
+                    class="text-primary-600 hover:text-primary-700 font-semibold underline underline-offset-4 transition">
+                    <i class="fas fa-arrow-right ml-1"></i> جرب مكونات أخرى
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center py-6 text-gray-400 text-sm border-t border-primary-100">
+        <span class="text-xl align-middle ml-1">🌱</span> ZeroWaste Chef — قلّل هدر الطعام، ووفّر في الفاتورة
+    </footer>
+
+    <script>
+        const form = document.getElementById('recipeForm');
+        const loading = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+        const errorMessage = document.getElementById('errorMessage');
+        const result = document.getElementById('result');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const ingredients = document.getElementById('ingredients').value.trim();
+            if (!ingredients) {
+                showError('الرجاء إدخال مكون واحد على الأقل.');
+                return;
+            }
+
+            // UI: show loading, hide others
+            loading.classList.remove('hidden');
+            errorDiv.classList.add('hidden');
+            result.classList.add('hidden');
+            document.getElementById('submitBtn').disabled = true;
+
+            try {
+                const resp = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ ingredients })
+                });
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    showError(data.error || 'حدث خطأ غير متوقع.');
+                    return;
+                }
+
+                displayRecipe(data);
+            } catch (err) {
+                showError('فشل الاتصال بالخادم. تأكد من تشغيل السيرفر.');
+            } finally {
+                loading.classList.add('hidden');
+                document.getElementById('submitBtn').disabled = false;
+            }
+        });
+
+        function displayRecipe(data) {
+            document.getElementById('recipeTitle').textContent = data.title || 'وصفة بدون اسم';
+            document.getElementById('recipeCalories').innerHTML =
+                `<i class="fas fa-fire ml-1"></i> ${data.calories || 'غير محدد'} سعرة`;
+            // Ingredients
+            const ingContainer = document.getElementById('ingredientsList');
+            ingContainer.innerHTML = '';
+            (data.ingredients || []).forEach(ing => {
+                const span = document.createElement('span');
+                span.className = 'bg-primary-50 text-primary-800 px-3 py-1.5 rounded-full text-sm font-medium border border-primary-200';
+                span.textContent = ing;
+                ingContainer.appendChild(span);
+            });
+            // Steps
+            const stepsList = document.getElementById('stepsList');
+            stepsList.innerHTML = '';
+            (data.steps || []).forEach((step, i) => {
+                const li = document.createElement('li');
+                li.className = 'flex gap-3 items-start';
+                li.innerHTML = `<span class="step-number">${i + 1}</span><p class="text-gray-600 leading-relaxed pt-0.5">${step}</p>`;
+                stepsList.appendChild(li);
+            });
+            // Tips
+            const tipsSection = document.getElementById('tipsSection');
+            const recipeTips = document.getElementById('recipeTips');
+            if (data.tips) {
+                tipsSection.classList.remove('hidden');
+                recipeTips.textContent = data.tips;
+            } else {
+                tipsSection.classList.add('hidden');
+            }
+            // Scroll to result
+            result.classList.remove('hidden');
+            result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorDiv.classList.remove('hidden');
+            errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function resetForm() {
+            document.getElementById('ingredients').value = '';
+            result.classList.add('hidden');
+            errorDiv.classList.add('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            document.getElementById('ingredients').focus();
+        }
+    </script>
+</body>
+</html>
