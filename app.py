@@ -18,7 +18,7 @@ AI_API_KEY = os.getenv("AI_API_KEY", "")
 
 if AI_API_KEY.startswith("AIza"):
     AI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-    AI_MODEL = "gemini-2.0-flash"
+    AI_MODEL = "gemini-2.5-flash-lite"
 elif AI_API_KEY.lower().startswith("gsk_"):
     AI_BASE_URL = "https://api.groq.com/openai/v1"
     AI_MODEL = "mixtral-8x7b-32768"
