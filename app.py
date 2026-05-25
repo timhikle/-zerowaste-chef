@@ -14,8 +14,9 @@ if os.path.isdir(static_dir):
 templates_path = os.path.join(BASE_DIR, "templates")
 templates = Jinja2Templates(directory=templates_path)
 
-AI_MODEL = os.getenv("AI_MODEL", "gemma3:12b")
-AI_BASE_URL = os.getenv("AI_BASE_URL", "http://localhost:11434/v1")
+AI_API_KEY = os.getenv("AI_API_KEY")
+AI_MODEL = os.getenv("AI_MODEL", "mixtral-8x7b-32768")
+AI_BASE_URL = os.getenv("AI_BASE_URL", "https://api.groq.com/openai/v1")
 
 SYSTEM_PROMPT = """أنت مساعد طبخ خبير. مهمتك توليد وصفة طعام بناءً على مكونات معينة.
 يجب أن يكون الرد بصيغة JSON فقط ولا شيء غيره، وفق الهيكل التالي:
@@ -56,10 +57,11 @@ async def generate(ingredients: str = Form(...)):
     payload = {
         "model": AI_MODEL,
         "messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
-        "temperature": 0.7,
-        "stream": False
+        "temperature": 0.7
     }
     headers = {"Content-Type": "application/json"}
+    if AI_API_KEY:
+        headers["Authorization"] = f"Bearer {AI_API_KEY}"
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(url, json=payload, headers=headers)
         resp.raise_for_status()
