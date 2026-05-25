@@ -14,10 +14,8 @@ if os.path.isdir(static_dir):
 templates_path = os.path.join(BASE_DIR, "templates")
 templates = Jinja2Templates(directory=templates_path)
 
-AI_API_KEY = os.getenv("AI_API_KEY")
-AI_PROVIDER = os.getenv("AI_PROVIDER", "openai")
-AI_MODEL = os.getenv("AI_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
-AI_BASE_URL = os.getenv("AI_BASE_URL", "https://openrouter.ai/api/v1")
+AI_MODEL = os.getenv("AI_MODEL", "gemma3:12b")
+AI_BASE_URL = os.getenv("AI_BASE_URL", "http://localhost:11434/v1")
 
 SYSTEM_PROMPT = """أنت مساعد طبخ خبير. مهمتك توليد وصفة طعام بناءً على مكونات معينة.
 يجب أن يكون الرد بصيغة JSON فقط ولا شيء غيره، وفق الهيكل التالي:
@@ -51,8 +49,6 @@ async def health():
 
 @app.post("/generate")
 async def generate(ingredients: str = Form(...)):
-    if not AI_API_KEY or AI_API_KEY == "YOUR_API_KEY_HERE":
-        return JSONResponse(status_code=400, content={"error": "API key not set."})
     if not ingredients.strip():
         return JSONResponse(status_code=400, content={"error": "Please enter ingredients."})
     url = f"{AI_BASE_URL.rstrip('/')}/chat/completions"
@@ -60,13 +56,12 @@ async def generate(ingredients: str = Form(...)):
     payload = {
         "model": AI_MODEL,
         "messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
-        "temperature": 0.7
+        "temperature": 0.7,
+        "stream": False
     }
-    headers = {"Authorization": f"Bearer {AI_API_KEY}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=60) as client:
+    headers = {"Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(url, json=payload, headers=headers)
-        if resp.status_code == 429:
-            return JSONResponse(status_code=503, content={"error": "The AI service is currently busy (rate limit). Please wait a moment and try again."})
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"]
     text = raw.strip()
