@@ -1,16 +1,13 @@
-import os, json, sys
+import os, json
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from dotenv import load_dotenv
 import httpx
 
-load_dotenv()
+app = FastAPI(title="ZeroWaste Chef")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-app = FastAPI(title="ZeroWaste Chef")
 
 static_dir = os.path.join(BASE_DIR, "static")
 if os.path.isdir(static_dir):
@@ -19,9 +16,9 @@ if os.path.isdir(static_dir):
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 AI_API_KEY = os.getenv("AI_API_KEY")
-AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini")
+AI_PROVIDER = os.getenv("AI_PROVIDER", "openai")
 AI_MODEL = os.getenv("AI_MODEL", "google/gemma-4-31b-it:free")
-AI_BASE_URL = os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
+AI_BASE_URL = os.getenv("AI_BASE_URL", "https://openrouter.ai/api/v1")
 
 SYSTEM_PROMPT = """أنت مساعد طبخ خبير. مهمتك توليد وصفة طعام بناءً على مكونات معينة.
 يجب أن يكون الرد بصيغة JSON فقط ولا شيء غيره، وفق الهيكل التالي:
@@ -35,59 +32,6 @@ SYSTEM_PROMPT = """أنت مساعد طبخ خبير. مهمتك توليد وص
 """
 
 
-def _clean_json(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```json"):
-        text = text[len("```json"):]
-    if text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    return text.strip()
-
-
-async def _call_gemini(ingredients: str) -> dict:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{AI_MODEL}:generateContent?key={AI_API_KEY}"
-    prompt = f"المكونات المتوفرة: {ingredients}\n\nقدم وصفة واحدة مبتكرة وسريعة باستخدام هذه المكونات."
-    payload = {
-        "contents": [{
-            "role": "user",
-            "parts": [{"text": SYSTEM_PROMPT + "\n\n" + prompt}]
-        }]
-    }
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(url, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        raw = data["candidates"][0]["content"]["parts"][0]["text"]
-    return json.loads(_clean_json(raw))
-
-
-async def _call_openai(ingredients: str) -> dict:
-    url = f"{AI_BASE_URL.rstrip('/')}/chat/completions"
-    prompt = f"المكونات المتوفرة: {ingredients}\n\nقدم وصفة واحدة مبتكرة وسريعة باستخدام هذه المكونات."
-    payload = {
-        "model": AI_MODEL or "openai/gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.7
-    }
-    headers = {
-        "Authorization": f"Bearer {AI_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://zerowaste-chef.app",
-        "X-Title": "ZeroWaste Chef"
-    }
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(url, json=payload, headers=headers)
-        resp.raise_for_status()
-        data = resp.json()
-        raw = data["choices"][0]["message"]["content"]
-    return json.loads(_clean_json(raw))
-
-
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -95,14 +39,7 @@ async def index(request: Request):
 
 @app.get("/health")
 async def health():
-    return {
-        "status": "ok",
-        "static_exists": os.path.isdir(static_dir),
-        "templates_exists": os.path.isdir(os.path.join(BASE_DIR, "templates")),
-        "has_api_key": bool(AI_API_KEY) and AI_API_KEY != "YOUR_API_KEY_HERE",
-        "provider": AI_PROVIDER,
-        "model": AI_MODEL
-    }
+    return {"status": "ok"}
 
 
 @app.post("/generate")
@@ -110,36 +47,59 @@ async def generate(ingredients: str = Form(...)):
     if not AI_API_KEY or AI_API_KEY == "YOUR_API_KEY_HERE":
         return JSONResponse(
             status_code=400,
-            content={"error": "لم يتم ضبط مفتاح API. يرجى تعديل ملف .env ووضع المفتاح الصحيح."}
+            content={"error": "API key not set. Update the .env file."}
         )
     if not ingredients.strip():
         return JSONResponse(
             status_code=400,
-            content={"error": "الرجاء إدخال مكون واحد على الأقل."}
+            content={"error": "Please enter at least one ingredient."}
         )
     try:
-        if AI_PROVIDER == "openai":
-            recipe = await _call_openai(ingredients)
-        else:
-            recipe = await _call_gemini(ingredients)
+        url = f"{AI_BASE_URL.rstrip('/')}/chat/completions"
+        prompt = f"Ingredients: {ingredients}\n\nCreate one creative recipe using these ingredients. Reply in JSON only."
+        payload = {
+            "model": AI_MODEL,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.7
+        }
+        headers = {
+            "Authorization": f"Bearer {AI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            raw = data["choices"][0]["message"]["content"]
+        text = raw.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        recipe = json.loads(text.strip())
         return JSONResponse(content=recipe)
     except json.JSONDecodeError:
         return JSONResponse(
             status_code=500,
-            content={"error": "حدث خطأ في معالجة رد الذكاء الاصطناعي. يرجى المحاولة مرة أخرى."}
+            content={"error": "Failed to parse AI response. Try again."}
         )
     except httpx.HTTPStatusError as e:
         return JSONResponse(
             status_code=502,
-            content={"error": f"فشل الاتصال بخدمة الذكاء الاصطناعي: {e.response.status_code}"}
+            content={"error": f"AI service error: {e.response.status_code}"}
         )
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"error": f"حدث خطأ غير متوقع: {str(e)}"}
+            content={"error": str(e)}
         )
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=8000)
