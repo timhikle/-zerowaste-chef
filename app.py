@@ -1,4 +1,4 @@
-import os, json, re
+import os, json, sys
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -8,10 +8,15 @@ import httpx
 
 load_dotenv()
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 app = FastAPI(title="ZeroWaste Chef")
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+static_dir = os.path.join(BASE_DIR, "static")
+if os.path.isdir(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 AI_API_KEY = os.getenv("AI_API_KEY")
 AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini")
@@ -86,6 +91,18 @@ async def _call_openai(ingredients: str) -> dict:
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "static_exists": os.path.isdir(static_dir),
+        "templates_exists": os.path.isdir(os.path.join(BASE_DIR, "templates")),
+        "has_api_key": bool(AI_API_KEY) and AI_API_KEY != "YOUR_API_KEY_HERE",
+        "provider": AI_PROVIDER,
+        "model": AI_MODEL
+    }
 
 
 @app.post("/generate")
